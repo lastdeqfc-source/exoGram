@@ -9,56 +9,92 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: exogram-android-build
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60 # 120 минут избыточно для сборки APK, 60 — безопасный максимум
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
-          cache: 'gradle'
+          cache: gradle
 
-      - name: Create API_KEYS
+      - name: Validate secrets and create API_KEYS
+        shell: bash
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_HASH: ${{ secrets.APP_HASH }}
-        shell: bash
         run: |
-          set -e
-          # Проверка наличия секретов
-          if [ -z "$APP_ID" ] || [ -z "$APP_HASH" ]; then
-            echo "::error::Критические секреты APP_ID или APP_HASH отсутствуют!"
+          set -euo pipefail
+
+          if [[ -z "$APP_ID" ]]; then
+            echo "::error::GitHub Secret APP_ID is missing"
             exit 1
           fi
-          
-          # Безопасная запись через Here-Doc (защита от спецсимволов в секретах)
+
+          if [[ -z "$APP_HASH" ]]; then
+            echo "::error::GitHub Secret APP_HASH is missing"
+            exit 1
+          fi
+
+          # Безопасная запись через Here-Doc (защита от любых спецсимволов)
           cat << 'EOF' > API_KEYS
           APP_ID = "${{ secrets.APP_ID }}"
           APP_HASH = "${{ secrets.APP_HASH }}"
           MAPS_V2_API = ""
           EOF
 
-      - name: Build APK
+          echo "API_KEYS created successfully"
+
+      - name: Check Gradle wrapper
         shell: bash
         run: |
+          set -e
+          test -f gradlew
           chmod +x gradlew
+          java -version
+          ./gradlew --version
+
+      - name: Build Exogram APK
+        shell: bash
+        env:
+          # Задаем лимиты памяти как для Java, так и для воркеров Gradle
+          _JAVA_OPTIONS: "-Xmx3500m -XX:+UseG1GC"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3500m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false"
+        run: |
+          set -o pipefail
+          # --no-daemon и workers.max=1 спасут от вылета по памяти на тяжелом коде exteraGram
           ./gradlew assembleAfatRelease \
             --no-daemon \
-            --parallel \
             --no-configuration-cache \
+            -x lint \
+            -x test \
             --stacktrace
+
+      - name: Find APK files (Always run if build finished)
+        if: always()
+        shell: bash
+        run: |
+          echo "=== Поиск собранных APK ==="
+          find . -type f -path '*/build/outputs/apk/*.apk' -print || echo "APK не найдены"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Exogram-APK
-          path: 'app/build/outputs/apk/afat/release/*.apk' # Более точный путь исключает сканирование лишних папок
+          path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
+          retention-days: 7
           
