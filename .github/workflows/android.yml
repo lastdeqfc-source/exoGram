@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '11' # Переключаем на Java 11 для стабильности старых Gradle
           cache: gradle
 
       - name: Validate secrets and create API_KEYS
@@ -57,17 +57,16 @@ jobs:
 
           echo "API_KEYS created successfully"
 
-      - name: Build Exogram APK
-        shell: bash
-        run: |
-          set -o pipefail
-          chmod +x gradlew
-          
-          # Запускаем сборку без урезания потоков, но с флагом принудительной чистки кеша конфигурации
-          ./gradlew assembleAfatDebug \
-            --no-configuration-cache \
-            --no-build-cache \
+      # Используем официальный инструмент от создателей Gradle для безопасного запуска
+      - name: Setup and Run Gradle Build
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          arguments: |
+            assembleAfatDebug 
+            --no-configuration-cache 
             --stacktrace
+          # Ограничиваем аппетиты по памяти внутри самого экшена
+          gradle-home-cache-cleanup: true
 
       - name: Find APK files
         if: always()
