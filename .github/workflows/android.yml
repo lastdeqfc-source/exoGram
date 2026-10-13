@@ -21,17 +21,25 @@ jobs:
           distribution: temurin
           cache: gradle
 
+      - name: Create API_KEYS
+        env:
+          APP_ID: ${{ secrets.APP_ID }}
+          APP_HASH: ${{ secrets.APP_HASH }}
+        run: |
+          printf 'APP_ID = %s\n' "$APP_ID" > API_KEYS
+          printf 'APP_HASH = %s\n' "$APP_HASH" >> API_KEYS
+          printf 'MAPS_V2_API = \n' >> API_KEYS
+
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleAfatRelease
+          ./gradlew assembleAfatRelease --no-configuration-cache
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Exogram-APK
-          path: |
-            **/build/outputs/apk/**/*.apk
+          path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
-
-    
+          
