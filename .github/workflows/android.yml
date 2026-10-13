@@ -1,3 +1,4 @@
+
 name: Build Exogram APK
 
 on:
@@ -25,15 +26,13 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      # 1. Жесткая привязка к Java 11 — это лечит моментальный вылет Gradle 7.5.1 на старте
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
-          distribution: 'temurin'
-          java-version: '11'
-          cache: 'gradle'
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
 
-      # 2. Безопасное создание API_KEYS без риска искажения символов
       - name: Configure Telegram API Keys
         shell: bash
         env:
@@ -43,59 +42,52 @@ jobs:
           set -euo pipefail
 
           if [[ -z "$APP_ID" || -z "$APP_HASH" ]]; then
-            echo "::error::Критические секреты APP_ID или APP_HASH не найдены в настройках репозитория!"
+            echo "::error::APP_ID or APP_HASH secret is missing"
             exit 1
           fi
 
-          cat << 'EOF' > API_KEYS
-          APP_ID = "${{ secrets.APP_ID }}"
-          APP_HASH = "${{ secrets.APP_HASH }}"
-          MAPS_V2_API = ""
-          EOF
+          {
+            printf 'APP_ID = %s\n' "$APP_ID"
+            printf 'APP_HASH = "%s"\n' "$APP_HASH"
+            printf 'MAPS_V2_API = ""\n'
+          } > API_KEYS
 
-          # Дублируем во все возможные конфигурационные папки форков Telegram
-          mkdir -p TMessagesProj/config
-          cp API_KEYS TMessagesProj/
-          cp API_KEYS TMessagesProj/config/
+          echo "API_KEYS created successfully"
 
-          echo "Файлы API_KEYS успешно созданы во всех целевых папках."
-
-      # 3. Интеграция официального окружения сборщика с обходом валидации враппера
-      - name: Setup Gradle Environment
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           validate-wrappers: false
-          cache-disabled: true # Отсекаем старый битый кэш от прошлых неудачных попыток
+          cache-disabled: true
 
-      # 4. Сборка конкретного модуля в один поток (защита от Out of Memory на C++ коде)
+      - name: Show available build tasks
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj:tasks --all
+
       - name: Build Exogram APK
         shell: bash
         env:
-          _JAVA_OPTIONS: "-Xmx3300m -XX:+UseG1GC"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3300m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false -Dorg.gradle.daemon=false"
+          JAVA_TOOL_OPTIONS: -Xmx3300m -XX:+UseG1GC
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3300m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false"
         run: |
           set -o pipefail
-          chmod +x gradlew
-          
-          # -Pandroid.ninja.jobs=1  -> Спасает от зависания и вылета по ОЗУ (Exit Code 137) при сборке C++ ядра Телеграма
-          # :TMessagesProj:assembleAfatDebug -> Бьет точно в модуль приложения, собирая рабочую Debug-версию без костылей с цифровой подписью
-          ./gradlew :TMessagesProj:assembleAfatDebug \
+          ./gradlew :TMessagesProj:assembleAfatRelease \
             --no-configuration-cache \
+            --no-daemon \
             -Pandroid.ninja.jobs=1 \
-            -Pandroid.experimental.internal.lint.skip.runtime.version.check=true \
             -x lint \
             -x test \
             --stacktrace
 
-      # 5. Поиск созданного файла в любом случае
       - name: Inspect Build Outputs
         if: always()
         shell: bash
         run: |
-          echo "=== Сканирование директорий на наличие APK ==="
-          find . -type f -name "*.apk" -print || echo "APK файлы не найдены."
+          echo "=== APK files ==="
+          find . -type f -name '*.apk' -print
 
-      # 6. Загрузка готового APK в артефакты GitHub Actions
       - name: Upload Finished APK
         if: success()
         uses: actions/upload-artifact@v4
