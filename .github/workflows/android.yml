@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17' # Убедись, что исходники exteraGram требуют 17, а не 11 версию.
+          java-version: '17'
           cache: gradle
 
       - name: Validate secrets and create API_KEYS
@@ -49,7 +49,6 @@ jobs:
             exit 1
           fi
 
-          # Безопасная запись ключей
           cat << 'EOF' > API_KEYS
           APP_ID = "${{ secrets.APP_ID }}"
           APP_HASH = "${{ secrets.APP_HASH }}"
@@ -60,21 +59,14 @@ jobs:
 
       - name: Build Exogram APK
         shell: bash
-        env:
-          # Выделяем оптимальный объем памяти под JVM
-          _JAVA_OPTIONS: "-Xmx3500m -XX:+UseG1GC"
-          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3500m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false"
         run: |
           set -o pipefail
           chmod +x gradlew
           
-          # МЫ ЗАМЕНИЛИ assembleAfatRelease НА assembleAfatDebug
-          # Это решает проблему отсутствия подписи приложения!
+          # Запускаем сборку без урезания потоков, но с флагом принудительной чистки кеша конфигурации
           ./gradlew assembleAfatDebug \
-            --no-daemon \
             --no-configuration-cache \
-            -x lint \
-            -x test \
+            --no-build-cache \
             --stacktrace
 
       - name: Find APK files
