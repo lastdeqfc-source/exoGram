@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '17' # Убедись, что исходники exteraGram требуют 17, а не 11 версию.
           cache: gradle
 
       - name: Validate secrets and create API_KEYS
@@ -49,7 +49,7 @@ jobs:
             exit 1
           fi
 
-          # Безопасная запись через Here-Doc (защита от любых спецсимволов)
+          # Безопасная запись ключей
           cat << 'EOF' > API_KEYS
           APP_ID = "${{ secrets.APP_ID }}"
           APP_HASH = "${{ secrets.APP_HASH }}"
@@ -58,39 +58,34 @@ jobs:
 
           echo "API_KEYS created successfully"
 
-      - name: Check Gradle wrapper
-        shell: bash
-        run: |
-          set -e
-          test -f gradlew
-          chmod +x gradlew
-          java -version
-          ./gradlew --version
-
       - name: Build Exogram APK
         shell: bash
         env:
-          # Задаем лимиты памяти как для Java, так и для воркеров Gradle
+          # Выделяем оптимальный объем памяти под JVM
           _JAVA_OPTIONS: "-Xmx3500m -XX:+UseG1GC"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3500m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false"
         run: |
           set -o pipefail
-          # --no-daemon и workers.max=1 спасут от вылета по памяти на тяжелом коде exteraGram
-          ./gradlew assembleAfatRelease \
+          chmod +x gradlew
+          
+          # МЫ ЗАМЕНИЛИ assembleAfatRelease НА assembleAfatDebug
+          # Это решает проблему отсутствия подписи приложения!
+          ./gradlew assembleAfatDebug \
             --no-daemon \
             --no-configuration-cache \
             -x lint \
             -x test \
             --stacktrace
 
-      - name: Find APK files (Always run if build finished)
+      - name: Find APK files
         if: always()
         shell: bash
         run: |
-          echo "=== Поиск собранных APK ==="
-          find . -type f -path '*/build/outputs/apk/*.apk' -print || echo "APK не найдены"
+          echo "=== Поиск готовых APK ==="
+          find . -type f -path '*/build/outputs/apk/**/*.apk' -print || echo "APK файлы не найдены"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Exogram-APK
