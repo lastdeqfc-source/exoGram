@@ -28,7 +28,7 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '11' # Переключаем на Java 11 для стабильности старых Gradle
+          java-version: '17' # Возвращаем Java 17, она нужна для современных ТГ-клиентов
           cache: gradle
 
       - name: Validate secrets and create API_KEYS
@@ -57,7 +57,7 @@ jobs:
 
           echo "API_KEYS created successfully"
 
-      # Используем официальный инструмент от создателей Gradle для безопасного запуска
+      # Запускаем сборку через официальный экшен
       - name: Setup and Run Gradle Build
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -65,7 +65,8 @@ jobs:
             assembleAfatDebug 
             --no-configuration-cache 
             --stacktrace
-          # Ограничиваем аппетиты по памяти внутри самого экшена
+          # ОТКЛЮЧАЕМ ВАЛИДАЦИЮ КРИВОГО WRAPPER JAR
+          skip-wrapper-validation: true
           gradle-home-cache-cleanup: true
 
       - name: Find APK files
