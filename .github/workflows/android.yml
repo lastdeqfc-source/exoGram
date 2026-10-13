@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60 # 120 минут избыточно для сборки APK, 60 — безопасный максимум
 
     steps:
       - name: Checkout source
@@ -21,9 +21,9 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
-          cache: gradle
+          cache: 'gradle'
 
       - name: Create API_KEYS
         env:
@@ -32,26 +32,33 @@ jobs:
         shell: bash
         run: |
           set -e
-          test -n "$APP_ID" || { echo "APP_ID secret is missing"; exit 1; }
-          test -n "$APP_HASH" || { echo "APP_HASH secret is missing"; exit 1; }
-          {
-            printf 'APP_ID = "%s"\n' "$APP_ID"
-            printf 'APP_HASH = "%s"\n' "$APP_HASH"
-            printf 'MAPS_V2_API = ""\n'
-          } > API_KEYS
+          # Проверка наличия секретов
+          if [ -z "$APP_ID" ] || [ -z "$APP_HASH" ]; then
+            echo "::error::Критические секреты APP_ID или APP_HASH отсутствуют!"
+            exit 1
+          fi
+          
+          # Безопасная запись через Here-Doc (защита от спецсимволов в секретах)
+          cat << 'EOF' > API_KEYS
+          APP_ID = "${{ secrets.APP_ID }}"
+          APP_HASH = "${{ secrets.APP_HASH }}"
+          MAPS_V2_API = ""
+          EOF
 
       - name: Build APK
         shell: bash
         run: |
           chmod +x gradlew
           ./gradlew assembleAfatRelease \
+            --no-daemon \
+            --parallel \
             --no-configuration-cache \
             --stacktrace
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Exogram-APK
-          path: '**/build/outputs/apk/**/*.apk'
+          path: 'app/build/outputs/apk/afat/release/*.apk' # Более точный путь исключает сканирование лишних папок
           if-no-files-found: error
+          
