@@ -23,16 +23,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1 # Скачиваем только последний коммит для экономии места на диске
+          fetch-depth: 1
 
+      # 1. Жесткая привязка к Java 11 — это лечит моментальный вылет Gradle 7.5.1 на старте
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '11'
           cache: 'gradle'
 
-      # Идеально точная генерация API_KEYS и копирование во все возможные модули
+      # 2. Безопасное создание API_KEYS без риска искажения символов
       - name: Configure Telegram API Keys
         shell: bash
         env:
@@ -46,42 +47,38 @@ jobs:
             exit 1
           fi
 
-          # 1. Создаем мастер-файл в корне
           cat << 'EOF' > API_KEYS
           APP_ID = "${{ secrets.APP_ID }}"
           APP_HASH = "${{ secrets.APP_HASH }}"
           MAPS_V2_API = ""
           EOF
 
-          # 2. Дублируем в подмодули, чтобы сборщик точно их увидел
+          # Дублируем во все возможные конфигурационные папки форков Telegram
           mkdir -p TMessagesProj/config
           cp API_KEYS TMessagesProj/
           cp API_KEYS TMessagesProj/config/
 
-          echo "Файлы API_KEYS успешно разложены по целевым директориям."
+          echo "Файлы API_KEYS успешно созданы во всех целевых папках."
 
+      # 3. Интеграция официального окружения сборщика с обходом валидации враппера
       - name: Setup Gradle Environment
         uses: gradle/actions/setup-gradle@v4
         with:
-          validate-wrappers: false # Игнорируем кастомный или измененный gradle-wrapper.jar
-          cache-disabled: false
+          validate-wrappers: false
+          cache-disabled: true # Отсекаем старый битый кэш от прошлых неудачных попыток
 
-      # Точечный вызов модуля :TMessagesProj с жесткими ограничениями памяти
+      # 4. Сборка конкретного модуля в один поток (защита от Out of Memory на C++ коде)
       - name: Build Exogram APK
         shell: bash
         env:
-          # JVM забирает 3.3 ГБ, остальное остается системе под компиляторы g++/clang (NDK)
           _JAVA_OPTIONS: "-Xmx3300m -XX:+UseG1GC"
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3300m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false -Dorg.gradle.daemon=false"
         run: |
           set -o pipefail
           chmod +x gradlew
           
-          # Очищаем следы старых упавших билдов
-          ./gradlew clean
-          
-          # Собираем конкретный модуль :TMessagesProj
-          # -Pandroid.ninja.jobs=1 спасает от вылета по памяти на нативном C++ коде
+          # -Pandroid.ninja.jobs=1  -> Спасает от зависания и вылета по ОЗУ (Exit Code 137) при сборке C++ ядра Телеграма
+          # :TMessagesProj:assembleAfatDebug -> Бьет точно в модуль приложения, собирая рабочую Debug-версию без костылей с цифровой подписью
           ./gradlew :TMessagesProj:assembleAfatDebug \
             --no-configuration-cache \
             -Pandroid.ninja.jobs=1 \
@@ -90,15 +87,15 @@ jobs:
             -x test \
             --stacktrace
 
-      # Шаг отработает при любом исходе сборки, чтобы мы проверили папки
+      # 5. Поиск созданного файла в любом случае
       - name: Inspect Build Outputs
         if: always()
         shell: bash
         run: |
           echo "=== Сканирование директорий на наличие APK ==="
-          find . -type f -name "*.apk" -print || echo "APK файлы отсутствуют."
+          find . -type f -name "*.apk" -print || echo "APK файлы не найдены."
 
-      # Выгрузка готового приложения в артефакты
+      # 6. Загрузка готового APK в артефакты GitHub Actions
       - name: Upload Finished APK
         if: success()
         uses: actions/upload-artifact@v4
