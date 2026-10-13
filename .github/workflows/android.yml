@@ -1,14 +1,18 @@
-
 name: Build Exogram APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     steps:
       - name: Checkout source
@@ -17,23 +21,32 @@ jobs:
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
           distribution: temurin
+          java-version: '17'
           cache: gradle
 
       - name: Create API_KEYS
         env:
           APP_ID: ${{ secrets.APP_ID }}
           APP_HASH: ${{ secrets.APP_HASH }}
+        shell: bash
         run: |
-          printf 'APP_ID = %s\n' "$APP_ID" > API_KEYS
-          printf 'APP_HASH = %s\n' "$APP_HASH" >> API_KEYS
-          printf 'MAPS_V2_API = \n' >> API_KEYS
+          set -e
+          test -n "$APP_ID" || { echo "APP_ID secret is missing"; exit 1; }
+          test -n "$APP_HASH" || { echo "APP_HASH secret is missing"; exit 1; }
+          {
+            printf 'APP_ID = "%s"\n' "$APP_ID"
+            printf 'APP_HASH = "%s"\n' "$APP_HASH"
+            printf 'MAPS_V2_API = ""\n'
+          } > API_KEYS
 
       - name: Build APK
+        shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew assembleAfatRelease --no-configuration-cache
+          ./gradlew assembleAfatRelease \
+            --no-configuration-cache \
+            --stacktrace
 
       - name: Upload APK
         if: success()
@@ -42,4 +55,3 @@ jobs:
           name: Exogram-APK
           path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
-          
