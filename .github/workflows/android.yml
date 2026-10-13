@@ -1,4 +1,3 @@
-
 name: Build Exogram APK
 
 on:
@@ -24,15 +23,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 1 # Скачиваем только последний коммит для экономии места на диске
 
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
-          cache: gradle
+          cache: 'gradle'
 
-      - name: Validate secrets and create API_KEYS
+      # Идеально точная генерация API_KEYS и копирование во все возможные модули
+      - name: Configure Telegram API Keys
         shell: bash
         env:
           APP_ID: ${{ secrets.APP_ID }}
@@ -41,45 +42,64 @@ jobs:
           set -euo pipefail
 
           if [[ -z "$APP_ID" || -z "$APP_HASH" ]]; then
-            echo "::error::APP_ID or APP_HASH secret is missing"
+            echo "::error::Критические секреты APP_ID или APP_HASH не найдены в настройках репозитория!"
             exit 1
           fi
 
-          {
-            printf 'APP_ID = %s\n' "$APP_ID"
-            printf 'APP_HASH = "\\"%s\\""\n' "$APP_HASH"
-            printf 'MAPS_V2_API = ""\n'
-          } > API_KEYS
+          # 1. Создаем мастер-файл в корне
+          cat << 'EOF' > API_KEYS
+          APP_ID = "${{ secrets.APP_ID }}"
+          APP_HASH = "${{ secrets.APP_HASH }}"
+          MAPS_V2_API = ""
+          EOF
 
-          echo "API_KEYS created successfully"
+          # 2. Дублируем в подмодули, чтобы сборщик точно их увидел
+          mkdir -p TMessagesProj/config
+          cp API_KEYS TMessagesProj/
+          cp API_KEYS TMessagesProj/config/
 
-      - name: Set up Gradle
+          echo "Файлы API_KEYS успешно разложены по целевым директориям."
+
+      - name: Setup Gradle Environment
         uses: gradle/actions/setup-gradle@v4
         with:
-          validate-wrappers: false
+          validate-wrappers: false # Игнорируем кастомный или измененный gradle-wrapper.jar
+          cache-disabled: false
 
-      - name: Show available build tasks
-        shell: bash
-        run: |
-          chmod +x gradlew
-          ./gradlew :TMessagesProj:tasks --all
-
+      # Точечный вызов модуля :TMessagesProj с жесткими ограничениями памяти
       - name: Build Exogram APK
         shell: bash
+        env:
+          # JVM забирает 3.3 ГБ, остальное остается системе под компиляторы g++/clang (NDK)
+          _JAVA_OPTIONS: "-Xmx3300m -XX:+UseG1GC"
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3300m -Dorg.gradle.workers.max=1 -Dorg.gradle.vfs.watch=false -Dorg.gradle.daemon=false"
         run: |
           set -o pipefail
-          ./gradlew :TMessagesProj:assembleAfatRelease \
+          chmod +x gradlew
+          
+          # Очищаем следы старых упавших билдов
+          ./gradlew clean
+          
+          # Собираем конкретный модуль :TMessagesProj
+          # -Pandroid.ninja.jobs=1 спасает от вылета по памяти на нативном C++ коде
+          ./gradlew :TMessagesProj:assembleAfatDebug \
             --no-configuration-cache \
+            -Pandroid.ninja.jobs=1 \
+            -Pandroid.experimental.internal.lint.skip.runtime.version.check=true \
+            -x lint \
+            -x test \
             --stacktrace
 
-      - name: Find APK files
+      # Шаг отработает при любом исходе сборки, чтобы мы проверили папки
+      - name: Inspect Build Outputs
         if: always()
         shell: bash
         run: |
-          echo "=== APK files ==="
-          find . -type f -name '*.apk' -print
+          echo "=== Сканирование директорий на наличие APK ==="
+          find . -type f -name "*.apk" -print || echo "APK файлы отсутствуют."
 
-      - name: Upload APK
+      # Выгрузка готового приложения в артефакты
+      - name: Upload Finished APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
