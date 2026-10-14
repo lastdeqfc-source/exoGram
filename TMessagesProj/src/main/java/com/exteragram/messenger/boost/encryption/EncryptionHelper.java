@@ -3,8 +3,9 @@ package com.exteragram.messenger.boost.encryption;
 import org.telegram.messenger.MessageObject;
 
 public class EncryptionHelper {
-    public static CharSequence[] names = new CharSequence[0]; 
-    
+    // Делаем массив объектов, который сработает везде
+    public static Object[] names = new Object[10]; 
+
     public interface EncryptionCallback {
         void onResult(String message);
     }
@@ -21,20 +22,24 @@ public class EncryptionHelper {
         return 0; 
     }
     
+    public static String encryptMessage(String text, long id, int type, Object callback) {
+        return text;
+    }
+
     public static String encryptMessage(String text, long id, int type, EncryptionCallback callback) {
         return text;
     }
     
-    public static String encryptMessage(String text, long id, BaseEncryptor enc) { 
+    public static String encryptMessage(String text, long id, Object enc) { 
         return text; 
     }
     
-    public static MessageObject decryptMessage(Object obj, Object g) { 
-        return obj instanceof MessageObject ? (MessageObject) obj : null; 
+    public static Object decryptMessage(Object obj, Object g) { 
+        return obj; 
     }
     
-    public static MessageObject decryptMessage(Object obj) { 
-        return obj instanceof MessageObject ? (MessageObject) obj : null; 
+    public static Object decryptMessage(Object obj) { 
+        return obj; 
     }
     
     public static boolean isEncrypted(Object obj, Object n) { 
