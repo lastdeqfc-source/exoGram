@@ -3517,7 +3517,7 @@ public class ChatActivityEnterView extends BlurredFrameLayout implements Notific
                 encryptButton.setSubtext(EncryptionHelper.getEncryptorBy(dialog_id).getName());
                 encryptButton.setRightIcon(R.drawable.msg_arrowright);
                 encryptButton.getRightIcon().setVisibility(VISIBLE);
-                encryptButton.getRightIcon().setOnClickListener(v -> PopupUtils.showDialog(EncryptionHelper.names, LocaleController.getString(R.string.Encryptors), EncryptionHelper.getEncryptorTypeFor(dialog_id), getContext(), i -> {
+                encryptButton.getRightIcon().setOnClickListener(v -> PopupUtils.showDialog(java.util.Arrays.copyOf(EncryptionHelper.names, EncryptionHelper.names.length, CharSequence[].class), LocaleController.getString(R.string.Encryptors), EncryptionHelper.getEncryptorTypeFor(dialog_id), getContext(), i -> {
                     EncryptionHelper.setEncryptorTypeFor(dialog_id, i);
                     encryptButton.setSubtext(EncryptionHelper.getEncryptorBy(dialog_id).getName());
                 }));
