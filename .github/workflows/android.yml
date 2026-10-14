@@ -1,4 +1,3 @@
-
 name: Build Exogram APK
 
 on:
@@ -54,6 +53,31 @@ jobs:
 
           echo "API_KEYS created successfully"
 
+      - name: Create signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PASS=$(openssl rand -hex 16)
+          mkdir -p TMessagesProj/config
+          rm -f TMessagesProj/config/extera.jks
+
+          keytool -genkeypair \
+            -keystore TMessagesProj/config/extera.jks \
+            -storetype JKS \
+            -alias exogram \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$PASS" -keypass "$PASS" \
+            -dname "CN=Exogram, O=Exogram, C=UA"
+
+          {
+            printf 'SIGNING_KEY_STORE_PASSWORD=%s\n' "$PASS"
+            printf 'SIGNING_KEY_ALIAS=exogram\n'
+            printf 'SIGNING_KEY_PASSWORD=%s\n' "$PASS"
+          } >> API_KEYS
+
+          echo "Signing key created"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -96,4 +120,3 @@ jobs:
           path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
           retention-days: 7
-          
