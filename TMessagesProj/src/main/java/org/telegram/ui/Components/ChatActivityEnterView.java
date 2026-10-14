@@ -7268,8 +7268,8 @@ public class ChatActivityEnterView extends BlurredFrameLayout implements Notific
                 editingText = editingMessageObject.messageText;
             }
             if (EncryptionHelper.isEncrypted(editingMessageObject, null)) {
-                editingText = ChatUtils.getMessageText(EncryptionHelper.decryptMessage(editingMessageObject), null);
-            }
+                
+            }editingText = ChatUtils.getMessageText((MessageObject) EncryptionHelper.decryptMessage(editingMessageObject), null);
             if (editingText != null) {
                 final Paint.FontMetricsInt fontMetricsInt;
                 Paint paint = null;
