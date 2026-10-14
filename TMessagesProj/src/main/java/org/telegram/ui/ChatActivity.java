@@ -25614,7 +25614,7 @@ public class ChatActivity extends BaseFragment implements NotificationCenter.Not
                     if (child instanceof ChatMessageCell) {
                         ChatMessageCell cell = (ChatMessageCell) child;
                         if (cell.getMessageObject() == selectedObject) {
-                            cell.setMessageObject(EncryptionHelper.decryptMessage(selectedObject, selectedObjectGroup), cell.getCurrentMessagesGroup(), cell.isPinnedBottom(), cell.isPinnedTop());
+                            cell.setMessageObject((MessageObject) EncryptionHelper.decryptMessage(selectedObject, selectedObjectGroup), cell.getCurrentMessagesGroup(), cell.isPinnedBottom(), cell.isPinnedTop());
                             chatAdapter.updateRowAtPosition(chatListView.getChildAdapterPosition(child));
                             break;
                         }
