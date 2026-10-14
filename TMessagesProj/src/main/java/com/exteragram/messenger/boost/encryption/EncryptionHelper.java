@@ -21,6 +21,9 @@ public class EncryptionHelper {
     public static int getEncryptorTypeFor(long id) { 
         return 0; 
     }
+
+    public static void setEncryptorTypeFor(long id, int type) { 
+    }
     
     public static String encryptMessage(String text, long id, int type, Object callback) {
         return text;
